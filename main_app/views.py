@@ -1,9 +1,9 @@
-from django.shortcuts import render
-from .models import Finch
-finches = [
-  {'name': 'Finchley', 'breed': 'House Finch', 'description': 'furry little demon', 'age': 3},
-  {'name': 'Sachi', 'breed': 'Red crossbill', 'description': 'gentle and loving', 'age': 2},
-]
+from django.shortcuts import render,redirect
+from django.views.generic.edit import CreateView,UpdateView, DeleteView
+from django.views.generic import ListView, DetailView
+from .models import Finch, Toy
+from .forms import FeedingForm
+
 
 # Define the home view
 def home(request):
@@ -21,4 +21,66 @@ def finches_index(request):
 
 def finches_detail(request, finch_id):
   finch = Finch.objects.get(id=finch_id)
-  return render(request, 'finches/detail.html', { 'finch': finch })
+   # First, create a list of the toy ids that the cat DOES have
+  id_list = finch.toys.all().values_list('id')
+  # Query for the toys that the cat doesn't have
+  # by using the exclude() method vs. the filter() method
+  toys_finch_doesnt_have = Toy.objects.exclude(id__in=id_list)
+  # instantiate FeedingForm to be rendered in detail.html
+  feeding_form = FeedingForm()
+  return render(request, 'finches/detail.html',
+     { 'finch': finch, 'feeding_form': feeding_form, 
+        'toys': toys_finch_doesnt_have
+      })
+
+def add_feeding(request, finch_id):
+  # create a ModelForm instance using the data in request.POST
+  form = FeedingForm(request.POST)
+  # validate the form
+  if form.is_valid():
+    # don't save the form to the db until it
+    # has the cat_id assigned
+    new_feeding = form.save(commit=False)
+    new_feeding.finch_id = finch_id
+    new_feeding.save()
+  return redirect('detail', finch_id=finch_id)
+
+
+class FinchCreate(CreateView):
+  model = Finch
+  fields = 'name','breed','description','age'
+
+class FinchUpdate(UpdateView):
+  model = Finch
+  
+  fields = ['breed', 'description', 'age']
+
+class FinchDelete(DeleteView):
+  model = Finch
+  success_url = '/finches'
+
+class ToyList(ListView):
+  model = Toy
+
+class ToyDetail(DetailView):
+  model = Toy
+
+class ToyCreate(CreateView):
+  model = Toy
+  fields = '__all__'
+
+class ToyUpdate(UpdateView):
+  model = Toy
+  fields = ['name', 'color']
+
+class ToyDelete(DeleteView):
+  model = Toy
+  success_url = '/toys'
+
+def assoc_toy(request, finch_id, toy_id):
+  Finch.objects.get(id=finch_id).toys.add(toy_id)
+  return redirect('detail', finch_id=finch_id)
+
+def unassoc_toy(request, finch_id, toy_id):
+    Finch.objects.get(id=finch_id).toys.remove(toy_id)
+    return redirect('detail', finch_id=finch_id)
